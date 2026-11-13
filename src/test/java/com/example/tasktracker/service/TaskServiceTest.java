@@ -134,4 +134,31 @@ class TaskServiceTest {
         assertThatThrownBy(() -> service.delete(1L)).isInstanceOf(TaskNotFoundException.class);
         verify(repository, never()).deleteById(any());
     }
+
+    @Test
+    void updateKeepsUnchangedPastDueDate() {
+        LocalDate pastDue = LocalDate.now().minusDays(3);
+        Task existing = new Task("Overdue", null, TaskStatus.IN_PROGRESS, pastDue);
+        existing.setId(1L);
+        when(repository.findById(1L)).thenReturn(Optional.of(existing));
+        when(repository.save(existing)).thenReturn(existing);
+
+        TaskResponse result = service.update(1L, new TaskRequest("Overdue", null, TaskStatus.DONE, pastDue));
+
+        assertThat(result.status()).isEqualTo(TaskStatus.DONE);
+        assertThat(result.dueDate()).isEqualTo(pastDue);
+    }
+
+    @Test
+    void updateRejectsChangingDueDateToThePast() {
+        Task existing = task(1L, "Task", TaskStatus.TODO);
+        when(repository.findById(1L)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.update(1L,
+                new TaskRequest("Task", null, TaskStatus.TODO, LocalDate.now().minusDays(1))))
+                .isInstanceOf(InvalidTaskException.class)
+                .hasMessage("dueDate must be today or in the future")
+                .extracting("field").isEqualTo("dueDate");
+        verify(repository, never()).save(any());
+    }
 }

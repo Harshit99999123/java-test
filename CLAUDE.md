@@ -39,6 +39,8 @@ Layered, one package per layer under `com.example.tasktracker`:
 
 PUT is a full replace: `update` copies every field from the request, so omitted optional fields become null.
 
+Because of that, the "dueDate not in the past" rule is split: POST enforces it via Bean Validation (`TaskRequest.OnCreate` group, applied with `@Validated` in the controller), while `TaskService.update` rejects a past `dueDate` only when it differs from the stored one (throwing `InvalidTaskException`, mapped to the same 400 shape). This lets clients resend an overdue task's date unchanged, e.g. to mark it DONE.
+
 ### Error responses
 
 All errors are RFC 7807 `ProblemDetail` bodies produced by `GlobalExceptionHandler`. 400s always carry an `errors` map (field → message, possibly empty) so clients see one shape whether the failure came from Bean Validation (`MethodArgumentNotValidException`) or from Jackson deserialization (`HttpMessageNotReadableException`). The Jackson handler deliberately classifies the cause (empty body / bad field value / unknown enum value / malformed JSON) and never echoes Jackson's own message, since it leaks internal class names. Tests assert exact `detail` and `errors.*` strings, so changing a message means updating `TaskControllerTest`.
