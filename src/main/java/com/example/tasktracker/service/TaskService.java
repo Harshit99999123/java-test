@@ -55,6 +55,13 @@ public class TaskService {
         return TaskResponse.from(repository.save(task));
     }
 
+    /** Marks the task DONE without touching any other field; completing a DONE task is a no-op. */
+    public TaskResponse complete(Long id) {
+        Task task = getTask(id);
+        task.setStatus(TaskStatus.DONE);
+        return TaskResponse.from(repository.save(task));
+    }
+
     public void delete(Long id) {
         if (!repository.existsById(id)) {
             throw new TaskNotFoundException(id);

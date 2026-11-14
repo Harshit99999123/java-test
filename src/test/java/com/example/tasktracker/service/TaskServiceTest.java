@@ -161,4 +161,27 @@ class TaskServiceTest {
                 .extracting("field").isEqualTo("dueDate");
         verify(repository, never()).save(any());
     }
+
+    @Test
+    void completeMarksTaskDone() {
+        Task existing = task(1L, "Task", TaskStatus.IN_PROGRESS);
+        when(repository.findById(1L)).thenReturn(Optional.of(existing));
+        when(repository.save(existing)).thenReturn(existing);
+
+        TaskResponse result = service.complete(1L);
+
+        verify(repository).save(existing);
+        assertThat(result.status()).isEqualTo(TaskStatus.DONE);
+        assertThat(result.title()).isEqualTo("Task");
+        assertThat(result.description()).isEqualTo("desc");
+        assertThat(result.dueDate()).isEqualTo(LocalDate.of(2030, 1, 1));
+    }
+
+    @Test
+    void completeThrowsWhenMissing() {
+        when(repository.findById(5L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.complete(5L)).isInstanceOf(TaskNotFoundException.class);
+        verify(repository, never()).save(any());
+    }
 }

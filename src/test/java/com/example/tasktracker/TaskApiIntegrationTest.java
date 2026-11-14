@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -133,5 +134,31 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.errors.dueDate").value("dueDate must be today or in the future"));
 
         assertThat(taskRepository.findById(task.getId()).orElseThrow().getDueDate()).isEqualTo(future);
+    }
+
+    @Test
+    void patchCompleteMarksOverdueTaskDone() throws Exception {
+        LocalDate pastDue = LocalDate.now().minusDays(3);
+        Task overdue = taskRepository.save(new Task("File taxes", "2025 return", TaskStatus.IN_PROGRESS, pastDue));
+
+        mockMvc.perform(patch("/api/tasks/{id}/complete", overdue.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(overdue.getId()))
+                .andExpect(jsonPath("$.status").value("DONE"))
+                .andExpect(jsonPath("$.title").value("File taxes"))
+                .andExpect(jsonPath("$.dueDate").value(pastDue.toString()));
+
+        Task saved = taskRepository.findById(overdue.getId()).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(TaskStatus.DONE);
+        assertThat(saved.getTitle()).isEqualTo("File taxes");
+        assertThat(saved.getDescription()).isEqualTo("2025 return");
+        assertThat(saved.getDueDate()).isEqualTo(pastDue);
+    }
+
+    @Test
+    void patchCompleteReturns404ForMissingTask() throws Exception {
+        mockMvc.perform(patch("/api/tasks/{id}/complete", 999_999L))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value("Task 999999 not found"));
     }
 }

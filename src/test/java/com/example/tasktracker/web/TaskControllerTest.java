@@ -23,6 +23,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -216,5 +217,40 @@ class TaskControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("Validation failed"))
                 .andExpect(jsonPath("$.errors.dueDate").value("dueDate must be today or in the future"));
+    }
+
+    @Test
+    void completeReturns200WithDoneTask() throws Exception {
+        LocalDate due = LocalDate.of(2030, 1, 1);
+        when(service.complete(7L)).thenReturn(new TaskResponse(7L, "Ship it", "v1", TaskStatus.DONE, due));
+
+        mockMvc.perform(patch("/api/tasks/7/complete"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(7))
+                .andExpect(jsonPath("$.title").value("Ship it"))
+                .andExpect(jsonPath("$.description").value("v1"))
+                .andExpect(jsonPath("$.status").value("DONE"))
+                .andExpect(jsonPath("$.dueDate").value(due.toString()));
+
+        verify(service).complete(7L);
+    }
+
+    @Test
+    void completeMissingTaskReturns404() throws Exception {
+        when(service.complete(42L)).thenThrow(new TaskNotFoundException(42L));
+
+        mockMvc.perform(patch("/api/tasks/42/complete"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value("Task 42 not found"));
+    }
+
+    @Test
+    void completeRejectsNonNumericId() throws Exception {
+        mockMvc.perform(patch("/api/tasks/abc/complete"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Validation failed"))
+                .andExpect(jsonPath("$.errors.id").value("id has an invalid value"));
+
+        verify(service, never()).complete(any());
     }
 }
