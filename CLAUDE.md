@@ -37,6 +37,8 @@ Layered, one package per layer under `com.example.tasktracker`:
 - `model` — `Task` JPA entity; `TaskStatus` enum is persisted as a string.
 - `dto` — `TaskRequest` / `TaskResponse` records. Entities never cross the web boundary; map with `TaskResponse.from(task)`. Bean Validation constraints (and their user-facing messages) live on `TaskRequest`.
 
+`GET /api/tasks/search?q=` is a case-insensitive, trimmed substring match on `title` (Spring Data `Containing`, so `%`/`_` are literal). `q` is validated by constraints on the `@RequestParam` (Spring's built-in method validation → `HandlerMethodValidationException`); missing `q` raises `MissingServletRequestParameterException`. Both are mapped to the standard 400 shape.
+
 PUT is a full replace: `update` copies every field from the request, so omitted optional fields become null.
 
 Because of that, the "dueDate not in the past" rule is split: POST enforces it via Bean Validation (`TaskRequest.OnCreate` group, applied with `@Validated` in the controller), while `TaskService.update` rejects a past `dueDate` only when it differs from the stored one (throwing `InvalidTaskException`, mapped to the same 400 shape). This lets clients resend an overdue task's date unchanged, e.g. to mark it DONE.

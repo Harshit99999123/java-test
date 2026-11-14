@@ -9,8 +9,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.Arrays;
@@ -81,6 +83,27 @@ public class GlobalExceptionHandler {
                 ? name + " must be one of " + Arrays.toString(target.getEnumConstants())
                 : name + " has an invalid value";
         return badRequest("Validation failed", Map.of(name, message));
+    }
+
+    /** A required query parameter is absent (e.g. {@code /api/tasks/search} without {@code q}). */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ProblemDetail handleMissingParameter(MissingServletRequestParameterException ex) {
+        String name = ex.getParameterName();
+        return badRequest("Validation failed", Map.of(name, name + " is required"));
+    }
+
+    /**
+     * Bean Validation constraints declared directly on controller method parameters
+     * (e.g. {@code @NotBlank} on a {@code @RequestParam}) failed. Keyed by parameter name.
+     */
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ProblemDetail handleMethodValidation(HandlerMethodValidationException ex) {
+        Map<String, String> errors = new LinkedHashMap<>();
+        ex.getParameterValidationResults().forEach(result -> {
+            String name = result.getMethodParameter().getParameterName();
+            result.getResolvableErrors().forEach(e -> errors.putIfAbsent(name, e.getDefaultMessage()));
+        });
+        return badRequest("Validation failed", errors);
     }
 
     private static ProblemDetail badRequest(String detail, Map<String, String> errors) {

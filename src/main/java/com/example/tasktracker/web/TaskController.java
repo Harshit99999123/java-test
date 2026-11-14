@@ -5,6 +5,8 @@ import com.example.tasktracker.dto.TaskResponse;
 import com.example.tasktracker.model.TaskStatus;
 import com.example.tasktracker.service.TaskService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import jakarta.validation.groups.Default;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +40,15 @@ public class TaskController {
     @GetMapping
     public List<TaskResponse> list(@RequestParam(required = false) TaskStatus status) {
         return status == null ? service.findAll() : service.findByStatus(status);
+    }
+
+    @GetMapping("/search")
+    public List<TaskResponse> search(
+            @RequestParam
+            @NotBlank(message = "q is required")
+            @Size(max = 100, message = "q must be at most 100 characters")
+            String q) {
+        return service.search(q);
     }
 
     @GetMapping("/{id}")

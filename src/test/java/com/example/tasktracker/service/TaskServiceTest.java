@@ -184,4 +184,15 @@ class TaskServiceTest {
         assertThatThrownBy(() -> service.complete(5L)).isInstanceOf(TaskNotFoundException.class);
         verify(repository, never()).save(any());
     }
+
+    @Test
+    void searchTrimsKeywordAndMapsResults() {
+        when(repository.findByTitleContainingIgnoreCaseOrderByIdAsc("report"))
+                .thenReturn(List.of(task(3L, "Weekly report", TaskStatus.TODO)));
+
+        List<TaskResponse> result = service.search("  report ");
+
+        assertThat(result).extracting(TaskResponse::id).containsExactly(3L);
+        assertThat(result).extracting(TaskResponse::title).containsExactly("Weekly report");
+    }
 }
