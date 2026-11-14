@@ -2,14 +2,18 @@ package com.example.tasktracker.service;
 
 import com.example.tasktracker.dto.TaskRequest;
 import com.example.tasktracker.dto.TaskResponse;
+import com.example.tasktracker.dto.TaskStatsResponse;
 import com.example.tasktracker.model.Task;
 import com.example.tasktracker.model.TaskStatus;
+import com.example.tasktracker.repository.StatusCount;
 import com.example.tasktracker.repository.TaskRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Transactional
@@ -36,6 +40,20 @@ public class TaskService {
     public List<TaskResponse> search(String keyword) {
         return repository.findByTitleContainingIgnoreCaseOrderByIdAsc(keyword.trim()).stream()
                 .map(TaskResponse::from).toList();
+    }
+
+    /** Counts per status from a single GROUP BY query; every status is present, 0 if unused. */
+    @Transactional(readOnly = true)
+    public TaskStatsResponse stats() {
+        Map<TaskStatus, Long> byStatus = new EnumMap<>(TaskStatus.class);
+        for (TaskStatus status : TaskStatus.values()) {
+            byStatus.put(status, 0L);
+        }
+        for (StatusCount row : repository.countByStatus()) {
+            byStatus.put(row.status(), row.count());
+        }
+        long total = byStatus.values().stream().mapToLong(Long::longValue).sum();
+        return new TaskStatsResponse(total, byStatus);
     }
 
     @Transactional(readOnly = true)

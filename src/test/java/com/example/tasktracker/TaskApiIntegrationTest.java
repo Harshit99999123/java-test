@@ -198,4 +198,29 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.detail").value("Validation failed"))
                 .andExpect(jsonPath("$.errors.q").value("q is required"));
     }
+
+    @Test
+    void statsCountsTasksByStatusAgainstDatabase() throws Exception {
+        taskRepository.save(new Task("Todo one", null, TaskStatus.TODO, null));
+        taskRepository.save(new Task("Todo two", null, TaskStatus.TODO, null));
+        taskRepository.save(new Task("Done one", null, TaskStatus.DONE, null));
+
+        mockMvc.perform(get("/api/tasks/stats"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(3))
+                .andExpect(jsonPath("$.byStatus.TODO").value(2))
+                .andExpect(jsonPath("$.byStatus.IN_PROGRESS").value(0))
+                .andExpect(jsonPath("$.byStatus.DONE").value(1));
+    }
+
+    @Test
+    void statsOnEmptyDatabaseReturnsAllZeros() throws Exception {
+        mockMvc.perform(get("/api/tasks/stats"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(0))
+                .andExpect(jsonPath("$.byStatus.length()").value(3))
+                .andExpect(jsonPath("$.byStatus.TODO").value(0))
+                .andExpect(jsonPath("$.byStatus.IN_PROGRESS").value(0))
+                .andExpect(jsonPath("$.byStatus.DONE").value(0));
+    }
 }

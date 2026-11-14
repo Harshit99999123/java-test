@@ -2,6 +2,7 @@ package com.example.tasktracker.web;
 
 import com.example.tasktracker.dto.TaskRequest;
 import com.example.tasktracker.dto.TaskResponse;
+import com.example.tasktracker.dto.TaskStatsResponse;
 import com.example.tasktracker.model.TaskStatus;
 import com.example.tasktracker.service.InvalidTaskException;
 import com.example.tasktracker.service.TaskNotFoundException;
@@ -16,6 +17,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -317,5 +319,20 @@ class TaskControllerTest {
                 .andExpect(jsonPath("$.errors.q").value("q is required"));
 
         verify(service, never()).search(any());
+    }
+
+    @Test
+    void statsReturnsCountsByStatus() throws Exception {
+        when(service.stats()).thenReturn(new TaskStatsResponse(5,
+                Map.of(TaskStatus.TODO, 2L, TaskStatus.IN_PROGRESS, 0L, TaskStatus.DONE, 3L)));
+
+        mockMvc.perform(get("/api/tasks/stats"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(5))
+                .andExpect(jsonPath("$.byStatus.TODO").value(2))
+                .andExpect(jsonPath("$.byStatus.IN_PROGRESS").value(0))
+                .andExpect(jsonPath("$.byStatus.DONE").value(3));
+
+        verify(service).stats();
     }
 }

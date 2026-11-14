@@ -39,6 +39,8 @@ Layered, one package per layer under `com.example.tasktracker`:
 
 `GET /api/tasks/search?q=` is a case-insensitive, trimmed substring match on `title` (Spring Data `Containing`, so `%`/`_` are literal). Query parameters bind into the `TaskSearchRequest` record (`@Valid`, no `@RequestParam`), whose compact constructor trims `q` so the constraints check the value actually searched. Missing, blank and too-long `q` all surface as `MethodArgumentNotValidException`, i.e. the same handler and 400 shape as body validation.
 
+`GET /api/tasks/stats` returns `TaskStatsResponse` (`total` + `byStatus`) from one `GROUP BY` query (`TaskRepository.countByStatus`, projected into the `StatusCount` record). The service zero-fills `byStatus`, so every `TaskStatus` is always present in enum order.
+
 PUT is a full replace: `update` copies every field from the request, so omitted optional fields become null.
 
 Because of that, the "dueDate not in the past" rule is split: POST enforces it via Bean Validation (`TaskRequest.OnCreate` group, applied with `@Validated` in the controller), while `TaskService.update` rejects a past `dueDate` only when it differs from the stored one (throwing `InvalidTaskException`, mapped to the same 400 shape). This lets clients resend an overdue task's date unchanged, e.g. to mark it DONE.

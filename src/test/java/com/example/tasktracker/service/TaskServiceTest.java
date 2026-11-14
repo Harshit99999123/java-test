@@ -2,8 +2,10 @@ package com.example.tasktracker.service;
 
 import com.example.tasktracker.dto.TaskRequest;
 import com.example.tasktracker.dto.TaskResponse;
+import com.example.tasktracker.dto.TaskStatsResponse;
 import com.example.tasktracker.model.Task;
 import com.example.tasktracker.model.TaskStatus;
+import com.example.tasktracker.repository.StatusCount;
 import com.example.tasktracker.repository.TaskRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +20,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -194,5 +197,17 @@ class TaskServiceTest {
 
         assertThat(result).extracting(TaskResponse::id).containsExactly(3L);
         assertThat(result).extracting(TaskResponse::title).containsExactly("Weekly report");
+    }
+
+    @Test
+    void statsFillsMissingStatusesWithZeroAndSumsTotal() {
+        when(repository.countByStatus()).thenReturn(List.of(
+                new StatusCount(TaskStatus.DONE, 4L), new StatusCount(TaskStatus.TODO, 2L)));
+
+        TaskStatsResponse result = service.stats();
+
+        assertThat(result.total()).isEqualTo(6L);
+        assertThat(result.byStatus()).containsExactly(
+                entry(TaskStatus.TODO, 2L), entry(TaskStatus.IN_PROGRESS, 0L), entry(TaskStatus.DONE, 4L));
     }
 }
