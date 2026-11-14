@@ -35,7 +35,9 @@ Layered, one package per layer under `com.example.tasktracker`:
 - `service` — `TaskService` owns all transactions (class-level `@Transactional`, `readOnly` on queries) and throws `TaskNotFoundException` for missing IDs.
 - `repository` — plain Spring Data `JpaRepository`.
 - `model` — `Task` JPA entity; `TaskStatus` enum is persisted as a string.
-- `dto` — `TaskRequest` / `TaskResponse` records. Entities never cross the web boundary; map with `TaskResponse.from(task)`. Bean Validation constraints (and their user-facing messages) live on `TaskRequest`.
+- `dto` — `TaskRequest` / `TaskResponse` records. Entities never cross the web boundary; map with `TaskResponse.from(task)`. Bean Validation constraints (and their user-facing messages) live on the request records: `TaskRequest` for bodies, `TaskSearchRequest` for the search query parameters.
+
+`GET /api/tasks/search?q=` is a case-insensitive, trimmed substring match on `title` (Spring Data `Containing`, so `%`/`_` are literal). Query parameters bind into the `TaskSearchRequest` record (`@Valid`, no `@RequestParam`), whose compact constructor trims `q` so the constraints check the value actually searched. Missing, blank and too-long `q` all surface as `MethodArgumentNotValidException`, i.e. the same handler and 400 shape as body validation.
 
 PUT is a full replace: `update` copies every field from the request, so omitted optional fields become null.
 

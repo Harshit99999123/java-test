@@ -31,6 +31,13 @@ public class TaskService {
         return repository.findByStatus(status).stream().map(TaskResponse::from).toList();
     }
 
+    /** Case-insensitive substring match on the title; the keyword is trimmed first. */
+    @Transactional(readOnly = true)
+    public List<TaskResponse> search(String keyword) {
+        return repository.findByTitleContainingIgnoreCaseOrderByIdAsc(keyword.trim()).stream()
+                .map(TaskResponse::from).toList();
+    }
+
     @Transactional(readOnly = true)
     public TaskResponse findById(Long id) {
         return TaskResponse.from(getTask(id));

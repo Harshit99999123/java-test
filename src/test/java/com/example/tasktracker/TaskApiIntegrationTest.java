@@ -161,4 +161,41 @@ class TaskApiIntegrationTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("Task 999999 not found"));
     }
+
+    @Test
+    void searchMatchesTitleCaseInsensitively() throws Exception {
+        Task first = taskRepository.save(new Task("Quarterly REPORT", null, TaskStatus.TODO, null));
+        taskRepository.save(new Task("Buy milk", "report in description only", TaskStatus.TODO, null));
+        Task second = taskRepository.save(new Task("Send report to boss", null, TaskStatus.DONE, null));
+
+        mockMvc.perform(get("/api/tasks/search").param("q", "  Report "))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(first.getId()))
+                .andExpect(jsonPath("$[0].title").value("Quarterly REPORT"))
+                .andExpect(jsonPath("$[1].id").value(second.getId()));
+
+        mockMvc.perform(get("/api/tasks/search").param("q", "nothing-matches"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void searchTreatsLikeWildcardsLiterally() throws Exception {
+        taskRepository.save(new Task("Raise prices 10%", null, TaskStatus.TODO, null));
+        taskRepository.save(new Task("Raise prices 100", null, TaskStatus.TODO, null));
+
+        mockMvc.perform(get("/api/tasks/search").param("q", "10%"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].title").value("Raise prices 10%"));
+    }
+
+    @Test
+    void searchRejectsBlankQuery() throws Exception {
+        mockMvc.perform(get("/api/tasks/search").param("q", ""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Validation failed"))
+                .andExpect(jsonPath("$.errors.q").value("q is required"));
+    }
 }

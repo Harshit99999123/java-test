@@ -2,6 +2,7 @@ package com.example.tasktracker.web;
 
 import com.example.tasktracker.dto.TaskRequest;
 import com.example.tasktracker.dto.TaskResponse;
+import com.example.tasktracker.dto.TaskSearchRequest;
 import com.example.tasktracker.model.TaskStatus;
 import com.example.tasktracker.service.TaskService;
 import jakarta.validation.Valid;
@@ -38,6 +39,11 @@ public class TaskController {
     @GetMapping
     public List<TaskResponse> list(@RequestParam(required = false) TaskStatus status) {
         return status == null ? service.findAll() : service.findByStatus(status);
+    }
+
+    @GetMapping("/search")
+    public List<TaskResponse> search(@Valid TaskSearchRequest request) {
+        return service.search(request.q());
     }
 
     @GetMapping("/{id}")
