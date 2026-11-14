@@ -297,4 +297,25 @@ class TaskControllerTest {
 
         verify(service, never()).search(any());
     }
+
+    @Test
+    void searchAppliesLengthLimitAfterTrimming() throws Exception {
+        when(service.search("report")).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/tasks/search").param("q", " ".repeat(95) + "report" + " ".repeat(10)))
+                .andExpect(status().isOk());
+
+        verify(service).search("report");
+    }
+
+    @Test
+    void searchReportsOnlyRequiredForLongWhitespaceQuery() throws Exception {
+        mockMvc.perform(get("/api/tasks/search").param("q", " ".repeat(101)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Validation failed"))
+                .andExpect(jsonPath("$.errors.length()").value(1))
+                .andExpect(jsonPath("$.errors.q").value("q is required"));
+
+        verify(service, never()).search(any());
+    }
 }
