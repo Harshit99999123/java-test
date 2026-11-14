@@ -1,5 +1,6 @@
 package com.example.tasktracker.web;
 
+import com.example.tasktracker.service.InvalidTaskException;
 import com.example.tasktracker.service.TaskNotFoundException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
@@ -23,6 +24,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(TaskNotFoundException.class)
     public ProblemDetail handleNotFound(TaskNotFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    /** A rule the service enforces against stored state; same shape as Bean Validation failures. */
+    @ExceptionHandler(InvalidTaskException.class)
+    public ProblemDetail handleInvalidTask(InvalidTaskException ex) {
+        return badRequest("Validation failed", Map.of(ex.getField(), ex.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

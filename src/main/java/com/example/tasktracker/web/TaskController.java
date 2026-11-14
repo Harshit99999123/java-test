@@ -5,8 +5,10 @@ import com.example.tasktracker.dto.TaskResponse;
 import com.example.tasktracker.model.TaskStatus;
 import com.example.tasktracker.service.TaskService;
 import jakarta.validation.Valid;
+import jakarta.validation.groups.Default;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -43,7 +45,7 @@ public class TaskController {
     }
 
     @PostMapping
-    public ResponseEntity<TaskResponse> create(@Valid @RequestBody TaskRequest request) {
+    public ResponseEntity<TaskResponse> create(@Validated({Default.class, TaskRequest.OnCreate.class}) @RequestBody TaskRequest request) {
         TaskResponse created = service.create(request);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}").buildAndExpand(created.id()).toUri();

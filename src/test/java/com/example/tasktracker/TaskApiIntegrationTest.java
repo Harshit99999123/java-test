@@ -21,6 +21,7 @@ import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -96,5 +97,41 @@ class TaskApiIntegrationTest {
         mockMvc.perform(get("/api/tasks"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(3));
+    }
+
+    @Test
+    void putCanMarkOverdueTaskDone() throws Exception {
+        LocalDate pastDue = LocalDate.now().minusDays(3);
+        Task overdue = taskRepository.save(new Task("File taxes", null, TaskStatus.IN_PROGRESS, pastDue));
+
+        mockMvc.perform(put("/api/tasks/{id}", overdue.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"File taxes","status":"DONE","dueDate":"%s"}
+                                """.formatted(pastDue)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DONE"))
+                .andExpect(jsonPath("$.dueDate").value(pastDue.toString()));
+
+        Task saved = taskRepository.findById(overdue.getId()).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(TaskStatus.DONE);
+        assertThat(saved.getDueDate()).isEqualTo(pastDue);
+    }
+
+    @Test
+    void putRejectsMovingDueDateIntoThePast() throws Exception {
+        LocalDate future = LocalDate.now().plusDays(5);
+        Task task = taskRepository.save(new Task("Plan trip", null, TaskStatus.TODO, future));
+
+        mockMvc.perform(put("/api/tasks/{id}", task.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Plan trip","status":"TODO","dueDate":"%s"}
+                                """.formatted(LocalDate.now().minusDays(1))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Validation failed"))
+                .andExpect(jsonPath("$.errors.dueDate").value("dueDate must be today or in the future"));
+
+        assertThat(taskRepository.findById(task.getId()).orElseThrow().getDueDate()).isEqualTo(future);
     }
 }

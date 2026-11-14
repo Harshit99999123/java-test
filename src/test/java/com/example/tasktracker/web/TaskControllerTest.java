@@ -3,6 +3,7 @@ package com.example.tasktracker.web;
 import com.example.tasktracker.dto.TaskRequest;
 import com.example.tasktracker.dto.TaskResponse;
 import com.example.tasktracker.model.TaskStatus;
+import com.example.tasktracker.service.InvalidTaskException;
 import com.example.tasktracker.service.TaskNotFoundException;
 import com.example.tasktracker.service.TaskService;
 import org.junit.jupiter.api.Test;
@@ -17,11 +18,13 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -165,5 +168,53 @@ class TaskControllerTest {
         mockMvc.perform(get("/api/tasks/42"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("Task 42 not found"));
+    }
+
+    @Test
+    void updateAcceptsPastDueDate() throws Exception {
+        LocalDate pastDue = LocalDate.now().minusDays(3);
+        when(service.update(eq(7L), any(TaskRequest.class)))
+                .thenReturn(new TaskResponse(7L, "Overdue", null, TaskStatus.DONE, pastDue));
+
+        mockMvc.perform(put("/api/tasks/7")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Overdue","status":"DONE","dueDate":"%s"}
+                                """.formatted(pastDue)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DONE"))
+                .andExpect(jsonPath("$.dueDate").value(pastDue.toString()));
+
+        verify(service).update(7L, new TaskRequest("Overdue", null, TaskStatus.DONE, pastDue));
+    }
+
+    @Test
+    void updateStillValidatesOtherFields() throws Exception {
+        mockMvc.perform(put("/api/tasks/7")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"  ","dueDate":"2000-01-01"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.title").value("title is required"))
+                .andExpect(jsonPath("$.errors.status").value("status is required"))
+                .andExpect(jsonPath("$.errors.dueDate").doesNotExist());
+
+        verify(service, never()).update(any(), any());
+    }
+
+    @Test
+    void updateMapsServiceRuleViolationTo400() throws Exception {
+        when(service.update(eq(7L), any(TaskRequest.class)))
+                .thenThrow(new InvalidTaskException("dueDate", "dueDate must be today or in the future"));
+
+        mockMvc.perform(put("/api/tasks/7")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"x","status":"TODO","dueDate":"2000-01-01"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Validation failed"))
+                .andExpect(jsonPath("$.errors.dueDate").value("dueDate must be today or in the future"));
     }
 }

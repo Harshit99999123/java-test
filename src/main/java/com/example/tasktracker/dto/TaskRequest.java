@@ -19,7 +19,17 @@ public record TaskRequest(
         @NotNull(message = "status is required")
         TaskStatus status,
 
-        @FutureOrPresent(message = "dueDate must be today or in the future")
+        @FutureOrPresent(groups = TaskRequest.OnCreate.class, message = TaskRequest.DUE_DATE_IN_PAST)
         LocalDate dueDate
 ) {
+
+    public static final String DUE_DATE_IN_PAST = "dueDate must be today or in the future";
+
+    /**
+     * Validation group for rules that apply only when creating a task. Updates skip them:
+     * PUT is a full replace, so clients must be able to resend a due date that has since
+     * passed. {@code TaskService.update} rejects a past due date only when it changes.
+     */
+    public interface OnCreate {
+    }
 }

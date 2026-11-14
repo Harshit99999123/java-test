@@ -8,6 +8,7 @@ import com.example.tasktracker.repository.TaskRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -42,6 +43,11 @@ public class TaskService {
 
     public TaskResponse update(Long id, TaskRequest request) {
         Task task = getTask(id);
+        LocalDate dueDate = request.dueDate();
+        // An already-overdue date may be resent unchanged; moving to a new past date may not.
+        if (dueDate != null && !dueDate.equals(task.getDueDate()) && dueDate.isBefore(LocalDate.now())) {
+            throw new InvalidTaskException("dueDate", TaskRequest.DUE_DATE_IN_PAST);
+        }
         task.setTitle(request.title());
         task.setDescription(request.description());
         task.setStatus(request.status());
