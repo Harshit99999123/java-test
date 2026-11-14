@@ -43,3 +43,6 @@ bin/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code (personal, per-machine overrides)
+.claude/settings.local.json
