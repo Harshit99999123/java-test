@@ -19,15 +19,19 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -334,5 +338,61 @@ class TaskControllerTest {
                 .andExpect(jsonPath("$.byStatus.DONE").value(3));
 
         verify(service).stats();
+    }
+
+    @Test
+    void unknownRouteReturnsProblemDetail404() throws Exception {
+        mockMvc.perform(get("/api/nope"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.detail").value("Resource not found"))
+                .andExpect(jsonPath("$.instance").value("/api/nope"));
+    }
+
+    @Test
+    void unsupportedMethodReturnsProblemDetail405WithAllow() throws Exception {
+        mockMvc.perform(delete("/api/tasks"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(header().string("Allow", containsString("GET")))
+                .andExpect(jsonPath("$.status").value(405))
+                .andExpect(jsonPath("$.detail").value("Method DELETE is not supported for this resource"));
+    }
+
+    @Test
+    void unsupportedContentTypeReturnsProblemDetail415() throws Exception {
+        mockMvc.perform(post("/api/tasks").contentType(MediaType.TEXT_PLAIN).content("hello"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(415))
+                .andExpect(jsonPath("$.detail").value("Content-Type must be application/json"));
+
+        verify(service, never()).create(any());
+    }
+
+    @Test
+    void unacceptableAcceptHeaderReturnsProblemDetail406() throws Exception {
+        when(service.stats()).thenReturn(new TaskStatsResponse(0,
+                Map.of(TaskStatus.TODO, 0L, TaskStatus.IN_PROGRESS, 0L, TaskStatus.DONE, 0L)));
+
+        mockMvc.perform(get("/api/tasks/stats").accept(MediaType.APPLICATION_XML))
+                .andExpect(status().isNotAcceptable())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(406))
+                .andExpect(jsonPath("$.detail").value("Responses can only be produced as application/json"));
+    }
+
+    @Test
+    void unexpectedExceptionReturnsProblemDetail500WithoutLeakingDetails() throws Exception {
+        when(service.stats()).thenThrow(new IllegalStateException("SELECT secret FROM internal_table"));
+
+        mockMvc.perform(get("/api/tasks/stats"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.detail").value("An unexpected error occurred"))
+                .andExpect(content().string(not(containsString("secret"))))
+                .andExpect(content().string(not(containsString("IllegalStateException"))));
     }
 }

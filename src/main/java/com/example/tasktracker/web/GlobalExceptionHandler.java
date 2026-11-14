@@ -5,13 +5,21 @@ import com.example.tasktracker.service.TaskNotFoundException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.ErrorResponse;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -20,6 +28,8 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(TaskNotFoundException.class)
     public ProblemDetail handleNotFound(TaskNotFoundException ex) {
@@ -81,6 +91,53 @@ public class GlobalExceptionHandler {
                 ? name + " must be one of " + Arrays.toString(target.getEnumConstants())
                 : name + " has an invalid value";
         return badRequest("Validation failed", Map.of(name, message));
+    }
+
+    /** No handler mapped for the path (Spring Boot raises this instead of a bare 404 page). */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ProblemDetail handleNoResource(NoResourceFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Resource not found");
+    }
+
+    /** Path exists but not for this method; keeps Spring's {@code Allow} header. */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ProblemDetail> handleMethodNotAllowed(HttpRequestMethodNotSupportedException ex) {
+        return withHeaders(ex, "Method " + ex.getMethod() + " is not supported for this resource");
+    }
+
+    /** Request body sent with a Content-Type no converter reads; keeps Spring's {@code Accept} header. */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ProblemDetail> handleUnsupportedMediaType(HttpMediaTypeNotSupportedException ex) {
+        return withHeaders(ex, "Content-Type must be application/json");
+    }
+
+    /** The Accept header excludes JSON; the problem itself is still rendered as application/problem+json. */
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    public ResponseEntity<ProblemDetail> handleNotAcceptable(HttpMediaTypeNotAcceptableException ex) {
+        return withHeaders(ex, "Responses can only be produced as application/json");
+    }
+
+    /**
+     * Anything not handled above. Other Spring MVC exceptions already carry a status and a
+     * client-safe detail ({@link ErrorResponse}), so keep those. Everything else is a 500 whose
+     * body never mentions the exception; the stack trace goes to the log only.
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ProblemDetail> handleUnexpected(Exception ex) {
+        if (ex instanceof ErrorResponse errorResponse) {
+            return ResponseEntity.status(errorResponse.getStatusCode())
+                    .headers(errorResponse.getHeaders())
+                    .body(errorResponse.getBody());
+        }
+        log.error("Unhandled exception", ex);
+        return ResponseEntity.internalServerError().body(
+                ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred"));
+    }
+
+    private static ResponseEntity<ProblemDetail> withHeaders(ErrorResponse ex, String detail) {
+        return ResponseEntity.status(ex.getStatusCode())
+                .headers(ex.getHeaders())
+                .body(ProblemDetail.forStatusAndDetail(ex.getStatusCode(), detail));
     }
 
     private static ProblemDetail badRequest(String detail, Map<String, String> errors) {

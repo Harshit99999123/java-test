@@ -19,10 +19,13 @@ import java.time.LocalDate;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.is;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -222,5 +225,31 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.byStatus.TODO").value(0))
                 .andExpect(jsonPath("$.byStatus.IN_PROGRESS").value(0))
                 .andExpect(jsonPath("$.byStatus.DONE").value(0));
+    }
+
+    @Test
+    void frameworkErrorsAreProblemDetails() throws Exception {
+        mockMvc.perform(get("/api/nope"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("Resource not found"));
+
+        mockMvc.perform(delete("/api/tasks"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(header().exists("Allow"))
+                .andExpect(jsonPath("$.detail").value("Method DELETE is not supported for this resource"));
+
+        mockMvc.perform(post("/api/tasks").contentType(MediaType.TEXT_PLAIN).content("hello"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("Content-Type must be application/json"));
+
+        mockMvc.perform(get("/api/tasks").accept(MediaType.APPLICATION_XML))
+                .andExpect(status().isNotAcceptable())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("Responses can only be produced as application/json"));
+
+        assertThat(taskRepository.count()).isZero();
     }
 }
