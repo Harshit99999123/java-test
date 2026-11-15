@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -137,6 +138,59 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.errors.dueDate").value("dueDate must be today or in the future"));
 
         assertThat(taskRepository.findById(task.getId()).orElseThrow().getDueDate()).isEqualTo(future);
+    }
+
+    @Test
+    void putIsFullReplaceSoOmittedOptionalFieldsBecomeNull() throws Exception {
+        Task task = taskRepository.save(
+                new Task("Old title", "old description", TaskStatus.TODO, LocalDate.now().plusDays(10)));
+
+        mockMvc.perform(put("/api/tasks/{id}", task.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"New title","status":"IN_PROGRESS"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(task.getId()))
+                .andExpect(jsonPath("$.title").value("New title"))
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.description").value(nullValue()))
+                .andExpect(jsonPath("$.dueDate").value(nullValue()));
+
+        Task saved = taskRepository.findById(task.getId()).orElseThrow();
+        assertThat(saved.getTitle()).isEqualTo("New title");
+        assertThat(saved.getStatus()).isEqualTo(TaskStatus.IN_PROGRESS);
+        assertThat(saved.getDescription()).isNull();
+        assertThat(saved.getDueDate()).isNull();
+    }
+
+    @Test
+    void deleteRemovesTaskFromDatabase() throws Exception {
+        Task task = taskRepository.save(new Task("Throwaway", null, TaskStatus.TODO, null));
+        Task other = taskRepository.save(new Task("Keep me", null, TaskStatus.TODO, null));
+
+        mockMvc.perform(delete("/api/tasks/{id}", task.getId()))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+
+        assertThat(taskRepository.existsById(task.getId())).isFalse();
+        assertThat(taskRepository.existsById(other.getId())).isTrue();
+
+        mockMvc.perform(get("/api/tasks/{id}", task.getId()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value("Task " + task.getId() + " not found"));
+    }
+
+    @Test
+    void deleteReturns404ForMissingTask() throws Exception {
+        taskRepository.save(new Task("Untouched", null, TaskStatus.TODO, null));
+
+        mockMvc.perform(delete("/api/tasks/{id}", 999_999L))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("Task 999999 not found"));
+
+        assertThat(taskRepository.count()).isEqualTo(1);
     }
 
     @Test

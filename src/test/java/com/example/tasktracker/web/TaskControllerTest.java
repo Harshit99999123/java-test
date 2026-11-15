@@ -23,6 +23,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -248,6 +249,35 @@ class TaskControllerTest {
         mockMvc.perform(patch("/api/tasks/42/complete"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("Task 42 not found"));
+    }
+
+    @Test
+    void deleteReturns204WithEmptyBody() throws Exception {
+        mockMvc.perform(delete("/api/tasks/7"))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+
+        verify(service).delete(7L);
+    }
+
+    @Test
+    void deleteMissingTaskReturns404() throws Exception {
+        doThrow(new TaskNotFoundException(42L)).when(service).delete(42L);
+
+        mockMvc.perform(delete("/api/tasks/42"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("Task 42 not found"));
+    }
+
+    @Test
+    void deleteRejectsNonNumericId() throws Exception {
+        mockMvc.perform(delete("/api/tasks/abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Validation failed"))
+                .andExpect(jsonPath("$.errors.id").value("id has an invalid value"));
+
+        verify(service, never()).delete(any());
     }
 
     @Test
