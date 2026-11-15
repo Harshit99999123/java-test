@@ -271,6 +271,16 @@ class TaskControllerTest {
     }
 
     @Test
+    void deleteRejectsNonNumericId() throws Exception {
+        mockMvc.perform(delete("/api/tasks/abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Validation failed"))
+                .andExpect(jsonPath("$.errors.id").value("id has an invalid value"));
+
+        verify(service, never()).delete(any());
+    }
+
+    @Test
     void completeRejectsNonNumericId() throws Exception {
         mockMvc.perform(patch("/api/tasks/abc/complete"))
                 .andExpect(status().isBadRequest())
